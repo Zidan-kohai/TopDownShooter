@@ -5,7 +5,7 @@ public class SimpleDIContainer
 {
     private SimpleDIContainer parentContainer;
     private Dictionary<(string, Type), SimpleDIRegistration> registration;
-
+    private HashSet<(string, Type)> resolutuons;
 
     public SimpleDIContainer(SimpleDIContainer parentContainer = null)
     {
@@ -59,6 +59,48 @@ public class SimpleDIContainer
         };
     }
 
+    public T Resolve<T>(string tag = null)
+    {
+        (string, Type) key = (tag, typeof(T));
+
+        if (resolutuons.Contains(key))
+        {
+            throw new Exception($"Cycle dependency for tag {key.Item1} and type {key.Item2.FullName}");
+        }
+
+        resolutuons.Add(key);
+
+        try
+        {
+            if (registration.TryGetValue(key, out SimpleDIRegistration register))
+            {
+                if (register.IsSingleton)
+                {
+                    if (register.Instance == null)
+                    {
+                        register.Instance = register.Factory(this);
+                    }
+
+                    return (T)register.Instance;
+                }
+
+                return (T)register.Factory(this);
+            }
+
+            if (parentContainer != null)
+            {
+                parentContainer.Resolve<T>(tag);
+            }
+        }
+        finally
+        {
+            resolutuons.Clear();
+        }
+
+
+        throw new Exception($"Coudn`t find dependency for tag {key.Item1} and type {key.Item2.FullName}");
+
+    }
     private void Register<T>((string, Type) key, Func<SimpleDIContainer, T> factory, bool isSingleton)
     {
         if (registration.ContainsKey(key))
